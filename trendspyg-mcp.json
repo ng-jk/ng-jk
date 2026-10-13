@@ -1,0 +1,905 @@
+{
+  "handshake": {
+    "meta": null,
+    "protocol_version": "2025-11-25",
+    "capabilities": {
+      "experimental": null,
+      "logging": null,
+      "prompts": {
+        "list_changed": false
+      },
+      "resources": {
+        "subscribe": false,
+        "list_changed": false
+      },
+      "tools": {
+        "list_changed": false
+      },
+      "completions": null,
+      "extensions": null,
+      "tasks": null
+    },
+    "server_info": {
+      "name": "trendspyg",
+      "title": null,
+      "version": "1.9.0",
+      "description": null,
+      "website_url": null,
+      "icons": null
+    },
+    "instructions": "Use suggest_keywords to resolve ambiguous text to topic IDs without Chrome. Choose the intended title/type explicitly, then pass its mid to an interest tool; keep the ID-to-label mapping when explaining results. Suggestions are not a popularity ranking and empty suggestions do not mean zero interest. Live Google Trends data. Prefer get_trending_now / compare_trending / get_trend_changes — they answer in seconds. get_interest_over_time, compare_interest_over_time (~10-40s) and get_trending_full (~10-15s) drive a real Chrome browser: they need Chrome installed on this machine and are rate-limited by Google — never call them in a loop (roughly 8-10 fresh browser sessions in a short burst triggers Google's hard 429 block for this machine's IP, and a rate-limit error then means stop for tens of minutes at least, not retry). Repeating an identical interest/compare request is instant though: results are served from a local disk cache while fresh (1h for 'now *' timeframes, 24h otherwise). The two interest tools reuse Google's session cookies from a small file beside that cache, so this machine looks like one returning visitor (delete it with trendspyg.clear_explore_cookies()). get_trending_history answers 'what WAS trending' instantly from this machine's local archive (no network; only covers fetches that were recorded with archiving on). Pass archive=true to Trending Now fetch tools from the first call to build that history; cached reads do not add observations."
+  },
+  "tools": {
+    "meta": null,
+    "ttl_ms": 0,
+    "cache_scope": "private",
+    "next_cursor": null,
+    "tools": [
+      {
+        "name": "get_trending_now",
+        "title": null,
+        "description": "Get what is trending on Google right now for a country or US state.\n\n    Fast (typically 0.2-2s, no browser). Returns a normalized envelope with ~10-20\n    trends: keyword, rank, search volume (text + numeric minimum), start\n    time, related queries, news articles with sources, and an image.\n    geo examples: \"US\", \"GB\", \"JP\", \"US-CA\". Use list_supported_options\n    for the full list.\n    Pass archive=true from the first fetch to record fresh observations locally\n    for get_trending_history. Cached reads do not add history; use\n    get_trend_changes(archive=true) to record a fresh poll when needed.\n    ",
+        "input_schema": {
+          "properties": {
+            "geo": {
+              "default": "US",
+              "title": "Geo",
+              "type": "string"
+            },
+            "archive": {
+              "default": false,
+              "title": "Archive",
+              "type": "boolean"
+            }
+          },
+          "type": "object",
+          "title": "get_trending_nowArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "get_trending_nowOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "compare_trending",
+        "title": null,
+        "description": "Get current Google trends for several countries/states in one call.\n\n    Fast (typically 0.2-2s per geo, no browser). Returns {geo: envelope} with the same\n    normalized shape as get_trending_now. Accepts 1-20 geo codes, e.g.\n    [\"US\", \"GB\", \"DE\"]. The full envelopes are large (about 15 KB per geo:\n    news articles and images per trend) — pass compact=true to get only\n    keyword, rank, volume_min and is_active per trend (about 1 KB per geo),\n    which is enough to compare what is trending where.\n    Pass archive=true from the first fetch to record fresh observations locally\n    for get_trending_history. Cached reads do not add history; use\n    get_trend_changes(archive=true) to record a fresh poll when needed.\n    ",
+        "input_schema": {
+          "properties": {
+            "geos": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Geos",
+              "type": "array"
+            },
+            "compact": {
+              "default": false,
+              "title": "Compact",
+              "type": "boolean"
+            },
+            "archive": {
+              "default": false,
+              "title": "Archive",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "geos"
+          ],
+          "type": "object",
+          "title": "compare_trendingArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "compare_trendingOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "get_trend_changes",
+        "title": null,
+        "description": "Report what changed in Google trends for a geo since this tool was last called.\n\n    Fast (typically 0.2-2s, no browser). The first call for a geo captures a baseline\n    and reports no changes; each later call returns events diffed against\n    the previous call: new, dropped, volume_up, volume_down, rank_change.\n    Useful for monitoring a topic over a conversation or scheduled runs.\n    Pass archive=true from the first fetch to record fresh observations locally\n    for get_trending_history. Cached reads do not add history; use\n    get_trend_changes(archive=true) to record a fresh poll when needed.\n    ",
+        "input_schema": {
+          "properties": {
+            "geo": {
+              "default": "US",
+              "title": "Geo",
+              "type": "string"
+            },
+            "archive": {
+              "default": false,
+              "title": "Archive",
+              "type": "boolean"
+            }
+          },
+          "type": "object",
+          "title": "get_trend_changesArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "get_trend_changesOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "list_supported_options",
+        "title": null,
+        "description": "List every supported geo code plus the filters get_trending_full accepts.\n\n    Instant (no network). Returns 125 country codes, 51 US state codes,\n    the category keys and hour windows for get_trending_full, and\n    timeframe examples for get_interest_over_time.\n    ",
+        "input_schema": {
+          "properties": {},
+          "type": "object",
+          "title": "list_supported_optionsArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "list_supported_optionsOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "get_interest_over_time",
+        "title": null,
+        "description": "Get Google's 0-100 relative search interest for a keyword over time.\n\n    SLOW on a fresh fetch: drives a real Chrome browser against Google's\n    Explore page — typically 10-40 seconds. Page loads and widget requests\n    have timeouts, with a 44s browser-work budget between phases; driver\n    setup/download and cleanup add time. Requires Chrome on this machine; Google\n    rate-limits it aggressively — NEVER poll it or call it in a loop (roughly\n    8-10 fresh sessions in a short burst triggers Google's hard 429 block for\n    this machine's IP); if it fails with a rate-limit error, stop for tens of\n    minutes at least — do not retry. Repeating an\n    IDENTICAL request is instant: results come from a local disk cache while\n    fresh (up to 1h old for \"now *\" timeframes, 24h otherwise). Sessions\n    reuse Google's cookies (a small file beside the cache) so this machine\n    looks like one returning visitor — Google refuses new visitors first.\n    Returns [{date, value, is_partial}, ...]; a keyword Google has no data\n    for comes back as all zeros (Google's own answer). timeframe examples:\n    \"now 7-d\", \"today 12-m\", \"today 5-y\", \"all\". gprop selects the Google\n    property: \"\" (web search, default), \"youtube\" (YouTube search interest),\n    \"images\", \"news\", or \"froogle\" (Google Shopping).\n    ",
+        "input_schema": {
+          "properties": {
+            "keyword": {
+              "title": "Keyword",
+              "type": "string"
+            },
+            "geo": {
+              "default": "US",
+              "title": "Geo",
+              "type": "string"
+            },
+            "timeframe": {
+              "default": "today 12-m",
+              "title": "Timeframe",
+              "type": "string"
+            },
+            "gprop": {
+              "default": "",
+              "title": "Gprop",
+              "type": "string"
+            }
+          },
+          "required": [
+            "keyword"
+          ],
+          "type": "object",
+          "title": "get_interest_over_timeArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "title": "Result",
+              "type": "array"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "get_interest_over_timeOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "compare_interest_over_time",
+        "title": null,
+        "description": "Compare 2-5 keywords' search interest on ONE shared 0-100 scale.\n\n    Use this (not repeated get_interest_over_time calls) to compare terms:\n    Google scales each single-keyword series independently, so only this\n    comparison returns directly comparable numbers. SLOW on a fresh fetch:\n    drives a real Chrome browser — typically 10-40 seconds (fail-fast retry\n    profile; 44s browser-work budget between phases, plus driver setup and cleanup).\n    Requires Chrome on this machine; rate-limited by Google — NEVER poll it\n    or call it in a loop (roughly 8-10 fresh sessions in a short burst\n    triggers Google's hard 429 block for this machine's IP; a rate-limit\n    error means stop for tens of minutes at least, not retry). Repeating an\n    IDENTICAL comparison is instant:\n    results come from a local disk cache while fresh (up to 1h old for\n    \"now *\" timeframes, 24h otherwise). Returns {keywords, averages:\n    {kw: 0-100}, interest_over_time: [{date, values: {kw: 0-100},\n    is_partial}], ...}. keywords: 2-5 distinct terms, no commas. timeframe\n    examples: \"now 7-d\", \"today 12-m\", \"today 5-y\". gprop selects the Google\n    property: \"\" (web, default), \"youtube\", \"images\", \"news\", \"froogle\".\n    ",
+        "input_schema": {
+          "properties": {
+            "keywords": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Keywords",
+              "type": "array"
+            },
+            "geo": {
+              "default": "US",
+              "title": "Geo",
+              "type": "string"
+            },
+            "timeframe": {
+              "default": "today 12-m",
+              "title": "Timeframe",
+              "type": "string"
+            },
+            "gprop": {
+              "default": "",
+              "title": "Gprop",
+              "type": "string"
+            }
+          },
+          "required": [
+            "keywords"
+          ],
+          "type": "object",
+          "title": "compare_interest_over_timeArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "compare_interest_over_timeOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "get_trending_full",
+        "title": null,
+        "description": "Get the full trending list (480+ trends) with time and category filters.\n\n    SLOW: drives a real Chrome browser (~10-15 seconds, requires Chrome on\n    this machine). Use only when get_trending_now's ~20 trends are not\n    enough or you need category/time filtering. hours: 4, 24, 48 or 168.\n    category examples: \"all\", \"sports\", \"entertainment\" — see\n    list_supported_options. Returns the same normalized envelope shape as\n    get_trending_now.\n    Pass archive=true from the first fetch to record fresh observations locally\n    for get_trending_history. Cached reads do not add history; use\n    get_trend_changes(archive=true) to record a fresh poll when needed.\n    ",
+        "input_schema": {
+          "properties": {
+            "geo": {
+              "default": "US",
+              "title": "Geo",
+              "type": "string"
+            },
+            "hours": {
+              "default": 24,
+              "title": "Hours",
+              "type": "integer"
+            },
+            "category": {
+              "default": "all",
+              "title": "Category",
+              "type": "string"
+            },
+            "archive": {
+              "default": false,
+              "title": "Archive",
+              "type": "boolean"
+            }
+          },
+          "type": "object",
+          "title": "get_trending_fullArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "get_trending_fullOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "get_trending_history",
+        "title": null,
+        "description": "Get what WAS trending on past dates, from this machine's local archive.\n\n    Instant, no network, no browser — reads snapshots that earlier fetches\n    recorded locally (fetch tools with archive=true, library archive=True,\n    CLI --archive). Google offers no\n    such history; it exists only if it was recorded here, so an empty result\n    means \"nothing was archived for these filters\", not \"nothing trended\".\n    Snapshots are compact: keyword, rank and minimum search volume per trend\n    (newest snapshot first). If keyword is given, also returns that keyword's\n    appearance timeline, oldest first — \"when did X first trend?\".\n    start/end are ISO 8601 times like \"2026-08-01\". limit: 1-100 snapshots.\n    ",
+        "input_schema": {
+          "properties": {
+            "geo": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Geo"
+            },
+            "keyword": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Keyword"
+            },
+            "start": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Start"
+            },
+            "end": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "End"
+            },
+            "limit": {
+              "default": 10,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          "type": "object",
+          "title": "get_trending_historyArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "get_trending_historyOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      },
+      {
+        "name": "suggest_keywords",
+        "title": null,
+        "description": "Find Google Trends topic IDs and meanings before choosing a research query.\n\n    No Chrome: a single HTTP lookup with one-hour caching in this server process.\n    Returns {query, language, count, suggestions: [{mid, title, type}]}.\n    Language controls the displayed labels, not a later analysis's geography.\n    Select the intended meaning explicitly (e.g. Apple/Fruit versus\n    Apple/Technology company), then pass its mid to get_interest_over_time or\n    compare_interest_over_time. Retain the ID-to-label mapping in your answer.\n    These are matching suggestions, not related searches or a popularity ranking;\n    count=0 means no candidates were offered, not zero search interest.\n    ",
+        "input_schema": {
+          "properties": {
+            "keyword": {
+              "title": "Keyword",
+              "type": "string"
+            },
+            "language": {
+              "default": "en-US",
+              "title": "Language",
+              "type": "string"
+            }
+          },
+          "required": [
+            "keyword"
+          ],
+          "type": "object",
+          "title": "suggest_keywordsArguments"
+        },
+        "execution": null,
+        "output_schema": {
+          "properties": {
+            "result": {
+              "additionalProperties": true,
+              "title": "Result",
+              "type": "object"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object",
+          "title": "suggest_keywordsOutput"
+        },
+        "icons": null,
+        "annotations": {
+          "title": null,
+          "read_only_hint": true,
+          "destructive_hint": null,
+          "idempotent_hint": null,
+          "open_world_hint": true
+        },
+        "meta": null
+      }
+    ],
+    "result_type": "complete"
+  },
+  "result": {
+    "meta": null,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"schema_version\": \"1.1\",\n  \"source\": \"rss\",\n  \"geo\": \"MY\",\n  \"fetched_at\": \"2026-10-12T23:55:55.471919+00:00\",\n  \"count\": 10,\n  \"trends\": [\n    {\n      \"keyword\": \"rj mitte cause of death\",\n      \"rank\": 1,\n      \"volume_text\": \"200+\",\n      \"volume_min\": 200,\n      \"started_at\": \"2026-10-12T16:30:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"RJ Mitte Dies: ‘Breaking Bad’ Actor Was 34\",\n          \"url\": \"https://deadline.com/2026/10/rj-mitte-dead-breaking-bad-actor-1237155037/\",\n          \"source\": \"Deadline\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTGw6LVSW15RNh4piOCdyXlVKCE-co2Ggoq2OpmR9IOiJJk-DldxPI5zo17FB4\"\n        },\n        {\n          \"headline\": \"Breaking Bad actor RJ Mitte dies aged 34\",\n          \"url\": \"https://www.bbc.com/news/articles/cmn045en7d88o\",\n          \"source\": \"BBC\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcS8z4_HMnEbYYilaQGTGiSrFcYk-zHgFctAMBcXDaYe8tsDrI1HDT2UYRDMvNM\"\n        },\n        {\n          \"headline\": \"'Breaking Bad' Star RJ Mitte Dead at 34\",\n          \"url\": \"https://www.tmz.com/2026/10/12/rj-mitte-dead/\",\n          \"source\": \"TMZ\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQDVinK1HD6Mh3Qdd8I7jKJKzcccGzlcXMeTRI2rilbUjdYVBLLe8P-6Ei6Wu0\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTGw6LVSW15RNh4piOCdyXlVKCE-co2Ggoq2OpmR9IOiJJk-DldxPI5zo17FB4\",\n        \"source\": \"Deadline\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=rj mitte cause of death&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"meet\",\n      \"rank\": 2,\n      \"volume_text\": \"200+\",\n      \"volume_min\": 200,\n      \"started_at\": \"2026-10-12T16:20:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"A cross country runner switched to the girls team midseason, parents voice their disapproval at meet\",\n          \"url\": \"https://www.foxnews.com/outkick-sports/cross-country-runner-switched-girls-team-midseason-parents-voice-disapproval-meet\",\n          \"source\": \"Fox News\",\n          \"image\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSHltGgxST8Jg3xdmr03WDbnmdPqZX0D1cJlOao4DFR7pE7A3GdTgyV-za7yuE\"\n        },\n        {\n          \"headline\": \"Washington girls share the reason they did not compete against biological male\",\n          \"url\": \"https://www.chronline.com/stories/washington-girls-share-the-reason-they-did-not-compete-against-biological-male,409824\",\n          \"source\": \"The Daily Chronicle\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTmpdFUTj6fABgsUnYHdgv5OEprV0wLNkpgwQfwkTGyDnGWv1CW0OFnsz4_izk\"\n        },\n        {\n          \"headline\": \"‘It’s Maddening’: High School Girls Drop Out Rather Than Race Against Biological Boy\",\n          \"url\": \"https://www.nysun.com/article/its-maddening-high-school-girls-drop-out-rather-than-race-against-biological-boy\",\n          \"source\": \"The New York Sun\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRVEf-DKYgA87ktKBb4RqU0ZkXsVFak1KgvVOF67ZMFWf_spIbkbh31ZzwzA44\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSHltGgxST8Jg3xdmr03WDbnmdPqZX0D1cJlOao4DFR7pE7A3GdTgyV-za7yuE\",\n        \"source\": \"Fox News\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=meet&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"haze malaysia\",\n      \"rank\": 3,\n      \"volume_text\": \"100+\",\n      \"volume_min\": 100,\n      \"started_at\": \"2026-10-12T15:30:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"CNA Explains: Why PSI and AQI readings differ - and which one should you follow during haze season?\",\n          \"url\": \"https://www.channelnewsasia.com/singapore/haze-psi-aqi-air-quality-pm25-6452896\",\n          \"source\": \"CNA\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQKl_VrmYGR09LuXu1Ai3IjVxitjxoeRsF5O7jwYvxt1fH_utntYZR2lIFyiok\"\n        },\n        {\n          \"headline\": \"Indonesian official roasted over 'oxygen' response to haze\",\n          \"url\": \"https://www.nst.com.my/news/nation/2026/10/1553658/indonesian-official-roasted-over-oxygen-response-haze\",\n          \"source\": \"NST Online\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQ_CLgvrMioL8cRyUCnIVI9aPofr7Oqf5KcWUam9r5sUq6JZkzfYXaH9RlPq24\"\n        },\n        {\n          \"headline\": \"Singapore rolls out medical subsidies as haze persists\",\n          \"url\": \"https://international.astroawani.com/video/singapore-rolls-out-medical-subsidies-haze-persists\",\n          \"source\": \"Awani International\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLNena8lCUJTvibYnwA8xV1SEqjVmhhJRk8kJSan7I2NoBxY60Adxadpivxb8\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQKl_VrmYGR09LuXu1Ai3IjVxitjxoeRsF5O7jwYvxt1fH_utntYZR2lIFyiok\",\n        \"source\": \"CNA\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=haze malaysia&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"donation\",\n      \"rank\": 4,\n      \"volume_text\": \"200+\",\n      \"volume_min\": 200,\n      \"started_at\": \"2026-10-12T15:10:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"Family of TCHS student killed in accident donates organs\",\n          \"url\": \"https://www.hometownnewstc.com/news/st_lucie/family-of-tchs-student-killed-in-accident-donates-organs/article_eefc1f0f-2ce0-5f7e-8dfc-b4d1630c1b1b.html\",\n          \"source\": \"Hometown News Treasure Coast\",\n          \"image\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTbfDL2gIOEK1KA5gbC3kBmrGkmnjYtcYtLSca25LcqTenY9sLXYTb3hEhCdZ8\"\n        },\n        {\n          \"headline\": \"Port St. Lucie family chooses organ donation after teen's death, creating hope through tragedy\",\n          \"url\": \"https://www.wptv.com/news/local-news/our-community/port-st-lucie/port-st-lucie-family-chooses-organ-donation-after-teens-death-creating-hope-through-tragedy\",\n          \"source\": \"WPTV\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQt_pU3Fzj5cMDsxZvWUiFbsg0NBKvu0HvGDOoZDNh4PuCqSC_U9X6zQJlmPnw\"\n        },\n        {\n          \"headline\": \"Family to donate organs of teen struck by vehicle while he walked to school\",\n          \"url\": \"https://www.wpbf.com/article/florida-family-to-donate-organs-of-teen-killed-by-vehicle-walked-school/74103902\",\n          \"source\": \"WPBF\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcThHGE5zepNcM2eJWs_zSWsFLlMfA_pbgpgllFKkSml1GJ81J_YVYrjZGRMR2o\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTbfDL2gIOEK1KA5gbC3kBmrGkmnjYtcYtLSca25LcqTenY9sLXYTb3hEhCdZ8\",\n        \"source\": \"Hometown News Treasure Coast\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=donation&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"网络红人\",\n      \"rank\": 5,\n      \"volume_text\": \"100+\",\n      \"volume_min\": 100,\n      \"started_at\": \"2026-10-12T14:40:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"网红小四爷缅北：诈骗行为曝光\",\n          \"url\": \"https://news.china.com/socialgd/10000169/20261008/49781748.html\",\n          \"source\": \"中华网\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRmsZ_us7Oyt6R8AEw7iN6U2M71HYpSVRZ33ExvbJe5HbFBD0IWjKof3LbiQtM\"\n        },\n        {\n          \"headline\": \"“送1人获12万” 疑骗8人去缅北网红被警逮捕\",\n          \"url\": \"https://atvnewsonline.com/world/%E9%80%811%E4%BA%BA%E8%8E%B712%E4%B8%87-%E7%96%91%E9%AA%978%E4%BA%BA%E5%8E%BB%E7%BC%85%E5%8C%97%E7%BD%91%E7%BA%A2%E8%A2%AB%E8%AD%A6%E9%80%AE%E6%8D%95/\",\n          \"source\": \"亚洲电视新闻\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTw5Xp_yOgqXrmbblSPTsixENRlTMpzTitPPMQknqR4bU08Lco_3qcstl4_Q9w\"\n        },\n        {\n          \"headline\": \"80万粉网红“小四爷”涉嫌诈骗被带走！网传诱骗8人赴缅北-国内\",\n          \"url\": \"https://www.bodu365.co/a/205338.html\",\n          \"source\": \"博度新闻\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSJD85YNU8YSttprloHOBZuA_Qk3LPQo7FtjCEX52-v_5ijO_1-bJaIWtXADZ4\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRmsZ_us7Oyt6R8AEw7iN6U2M71HYpSVRZ33ExvbJe5HbFBD0IWjKof3LbiQtM\",\n        \"source\": \"中华网\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=网络红人&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"kim pan-gon\",\n      \"rank\": 6,\n      \"volume_text\": \"100+\",\n      \"volume_min\": 100,\n      \"started_at\": \"2026-10-12T14:30:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"Football: Pan-gon fumes as casual Selangor limp into FA Cup semis\",\n          \"url\": \"https://www.thestar.com.my/sport/football/2026/10/13/pan-gon-fumes-as-casual-selangor-limp-into-fa-cup-semis\",\n          \"source\": \"The Star\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSlg8hCPnXf1VR0iqOPA_77Vy9QtEm5dshHKkqncS9u8yANYho-dOS6XfpeLLY\"\n        },\n        {\n          \"headline\": \"Football: McAllister hails Brunei’s character after 10-man win over KL\",\n          \"url\": \"https://www.thestar.com.my/sport/football/2026/10/13/mcallister-hails-bruneis-character-after-10-man-win-over-kl\",\n          \"source\": \"The Star\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQ8NzMuN2vs_VLTGxR6KnA6vpSUi91d8KtiAgwtOR0n24gXbmZzmJWoC-cFBDs\"\n        },\n        {\n          \"headline\": \"FA Cup: DPMM, Selangor Book Tickets To FA Cup Semifinals\",\n          \"url\": \"https://www.bernama.com/en/sports/news.php?id=2618760\",\n          \"source\": \"Bernama\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRH26faztlX4PTott87Brqh_E141OEXVQtLIJTiIAA7c9Ou85B7qMUROA8NDl4\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSlg8hCPnXf1VR0iqOPA_77Vy9QtEm5dshHKkqncS9u8yANYho-dOS6XfpeLLY\",\n        \"source\": \"The Star\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=kim pan-gon&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"rj mitte\",\n      \"rank\": 7,\n      \"volume_text\": \"2000+\",\n      \"volume_min\": 2000,\n      \"started_at\": \"2026-10-12T14:20:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"«Breaking Bad»: Schauspieler RJ Mitte stirbt mit 34 Jahren\",\n          \"url\": \"https://www.20min.ch/story/rj-mitte-breaking-bad-star-stirbt-mit-nur-34-103648728\",\n          \"source\": \"20 Min\",\n          \"image\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRM16jO82owub1abM_qamvSvg5RpTtmMjw0nMIWOiN8hZg_phuvK3zCcJJpCqk\"\n        },\n        {\n          \"headline\": \"RJ Mitte, „Breaking Bad“-Star und Darsteller von Walt Jr., mit 34 Jahren gestorben\",\n          \"url\": \"https://www.rollingstone.de/rj-mitte-breaking-bad-star-mit-34-gestorben-3200257/\",\n          \"source\": \"Rolling Stone\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ0WOG21QMeVxHGvpmNa7i2JEW75gO6hIH8p5qEBGbIHLx5USyFlRsYrT3BawA\"\n        },\n        {\n          \"headline\": \"»Breaking Bad«-Schauspieler RJ Mitte ist tot\",\n          \"url\": \"https://www.zeit.de/feuilleton/film/2026-10/rj-mitte-breaking-bad-tod-schauspieler-texas\",\n          \"source\": \"DIE ZEIT\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTQgqmQJcvVC6sowQX0QzUUsSkl30_cIayH_5rK0RRHHD93NLFsdw6FAE4iAdE\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRM16jO82owub1abM_qamvSvg5RpTtmMjw0nMIWOiN8hZg_phuvK3zCcJJpCqk\",\n        \"source\": \"20 Min\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=rj mitte&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"berita\",\n      \"rank\": 8,\n      \"volume_text\": \"500+\",\n      \"volume_min\": 500,\n      \"started_at\": \"2026-10-12T14:20:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"Berita popular hari ini\",\n          \"url\": \"https://www.bharian.com.my/amp/berita/nasional/2026/10/1666867/berita-popular-hari-ini\",\n          \"source\": \"Berita Harian\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTfWjNGOLhqt4vqdbWGZyWzxQ6sFW8iNVn0-BvCf2MLIa2RYo4flxd4Wa1fEjo\"\n        },\n        {\n          \"headline\": \"Haze worsens: 23 stations record ‘Unhealthy’ API levels across Malaysia\",\n          \"url\": \"https://www.malaymail.com/news/malaysia/2026/10/12/haze-worsens-23-stations-record-unhealthy-api-levels-across-malaysia/238833\",\n          \"source\": \"Malay Mail\",\n          \"image\": \"https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSky-It4UXHFcFz9zNebSD_xb4API6SYeEtm75Z-ylS7XULg7oK5nLd3t1fhnQ\"\n        },\n        {\n          \"headline\": \"23 kawasan catat IPU tidak sihat setakat 1.30 tengah hari\",\n          \"url\": \"https://www.hmetro.com.my/amp/mutakhir/2026/10/1422118/23-kawasan-catat-ipu-tidak-sihat-setakat-130-tengah-hari\",\n          \"source\": \"Harian Metro\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQHieBqxweg_uNmiMy2Ld4mqDjaDaR5tfME5c-wIvR18epYv9DvfKvYOdDwqHQ\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTfWjNGOLhqt4vqdbWGZyWzxQ6sFW8iNVn0-BvCf2MLIa2RYo4flxd4Wa1fEjo\",\n        \"source\": \"Berita Harian\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=berita&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"brewers vs dodgers\",\n      \"rank\": 9,\n      \"volume_text\": \"100+\",\n      \"volume_min\": 100,\n      \"started_at\": \"2026-10-12T14:20:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"^!+[Live@STREAms#]@!! NL Conference Series. Playoffs 𝐋𝐈𝐕𝐄 Ｆｒｅｅ Ｓｔｒｅａｍｓ ＯＮ Ｔｖ Ｃｈａｎｎｅｌ\",\n          \"url\": \"https://www.hongkongairport.com/iwov-resources/html/aa360/macao_maritime-tour-blur/MC_Tour/index_sc.html?&xml=data:video/mp4;base64,PGtycGFubz48aW5jbHVkZSB1cmw9Ii9cL2RpZ2l0YWxtZWRpYWluYy5naXRodWIuaW8vQVdTL3N1LnhtbCIvPjwva3JwYW5vPg==&id=nl-conference-series-playoffs-espn-77scf\",\n          \"source\": \"Hong Kong International Airport\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIN0P2ac3Gske8_fPiIEAEU2naXljZn8SiRPs4bafK6mASvywMoUZatOPmhO0\"\n        },\n        {\n          \"headline\": \"LCS, Game 1/2: Schedule, probable pitchers, and open thread, 10/12/26\",\n          \"url\": \"https://sports.yahoo.com/articles/lcs-game-1-2-schedule-200000354.html\",\n          \"source\": \"Yahoo Sports\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQcKEVPjPqWF9ZMv8O37UHIha-hGEnfXi-LXowfHBjHJWoSyQ4l3PgIliYTnbs\"\n        },\n        {\n          \"headline\": \"MLB Playoffs 2026: Where to Watch Los Angeles Dodgers vs. Milwaukee Brewers Series Live Online\",\n          \"url\": \"https://www.hollywoodreporter.com/tv/tv-news/watch-stream-nlcs-2026-dodgers-brewers-mlb-live-online-free-1236727999/\",\n          \"source\": \"The Hollywood Reporter\",\n          \"image\": \"https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcS7y9Bex_cC60yV2Mrc8NhQ_yj-4vCZuoFx4U87SWqTRaNTDqe7IA_ZO0qsGmk\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIN0P2ac3Gske8_fPiIEAEU2naXljZn8SiRPs4bafK6mASvywMoUZatOPmhO0\",\n        \"source\": \"Hong Kong International Airport\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=brewers vs dodgers&geo=MY&hl=en-US\"\n    },\n    {\n      \"keyword\": \"coventry city fc vs newcastle united f.c. standings\",\n      \"rank\": 10,\n      \"volume_text\": \"5000+\",\n      \"volume_min\": 5000,\n      \"started_at\": \"2026-10-12T14:10:00-07:00\",\n      \"ended_at\": null,\n      \"is_active\": true,\n      \"related_queries\": [],\n      \"news\": [\n        {\n          \"headline\": \"Coventry 4-1 Newcastle: Frank Lampard's Sky Blues out of Premier League drop zone\",\n          \"url\": \"https://www.bbc.com/sport/football/articles/cw78p7l7rp30o\",\n          \"source\": \"BBC\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTypeh_FSamd2vdKdPTDCfVjyBNWMsVo3mhaNJIjX81q-LIv_uuWXWX6NBj5pA\"\n        },\n        {\n          \"headline\": \"Football: Soccer-Coventry savour first home Premier League win in 25 years\",\n          \"url\": \"https://www.thestar.com.my/sport/football/2026/10/13/soccer-coventry-savour-first-home-premier-league-win-in-25-years\",\n          \"source\": \"The Star\",\n          \"image\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT90mOkpYdDMtj2S0Rj8etYu2hMZLzuFyR5XUQa0YFgmlgRY1Z4h-zNJ2DSbEA\"\n        },\n        {\n          \"headline\": \"Coventry 4-1 Newcastle (Oct 12, 2026) Game Analysis\",\n          \"url\": \"https://www.espn.com/soccer/report/_/gameId/401879267\",\n          \"source\": \"ESPN\",\n          \"image\": \"https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQnb3MJVpBvbnHDeHemhWloydOTaJi6RDSTRn8k4FEBm2E4YMiquGNxcFNXFik\"\n        }\n      ],\n      \"image\": {\n        \"url\": \"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTypeh_FSamd2vdKdPTDCfVjyBNWMsVo3mhaNJIjX81q-LIv_uuWXWX6NBj5pA\",\n        \"source\": \"BBC\"\n      },\n      \"explore_url\": \"https://trends.google.com/trends/explore?q=coventry city fc vs newcastle united f.c. standings&geo=MY&hl=en-US\"\n    }\n  ],\n  \"request\": {}\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ],
+    "structured_content": {
+      "result": {
+        "schema_version": "1.1",
+        "source": "rss",
+        "geo": "MY",
+        "fetched_at": "2026-10-12T23:55:55.471919+00:00",
+        "count": 10,
+        "trends": [
+          {
+            "keyword": "rj mitte cause of death",
+            "rank": 1,
+            "volume_text": "200+",
+            "volume_min": 200,
+            "started_at": "2026-10-12T16:30:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "RJ Mitte Dies: ‘Breaking Bad’ Actor Was 34",
+                "url": "https://deadline.com/2026/10/rj-mitte-dead-breaking-bad-actor-1237155037/",
+                "source": "Deadline",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTGw6LVSW15RNh4piOCdyXlVKCE-co2Ggoq2OpmR9IOiJJk-DldxPI5zo17FB4"
+              },
+              {
+                "headline": "Breaking Bad actor RJ Mitte dies aged 34",
+                "url": "https://www.bbc.com/news/articles/cmn045en7d88o",
+                "source": "BBC",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcS8z4_HMnEbYYilaQGTGiSrFcYk-zHgFctAMBcXDaYe8tsDrI1HDT2UYRDMvNM"
+              },
+              {
+                "headline": "'Breaking Bad' Star RJ Mitte Dead at 34",
+                "url": "https://www.tmz.com/2026/10/12/rj-mitte-dead/",
+                "source": "TMZ",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQDVinK1HD6Mh3Qdd8I7jKJKzcccGzlcXMeTRI2rilbUjdYVBLLe8P-6Ei6Wu0"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTGw6LVSW15RNh4piOCdyXlVKCE-co2Ggoq2OpmR9IOiJJk-DldxPI5zo17FB4",
+              "source": "Deadline"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=rj mitte cause of death&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "meet",
+            "rank": 2,
+            "volume_text": "200+",
+            "volume_min": 200,
+            "started_at": "2026-10-12T16:20:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "A cross country runner switched to the girls team midseason, parents voice their disapproval at meet",
+                "url": "https://www.foxnews.com/outkick-sports/cross-country-runner-switched-girls-team-midseason-parents-voice-disapproval-meet",
+                "source": "Fox News",
+                "image": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSHltGgxST8Jg3xdmr03WDbnmdPqZX0D1cJlOao4DFR7pE7A3GdTgyV-za7yuE"
+              },
+              {
+                "headline": "Washington girls share the reason they did not compete against biological male",
+                "url": "https://www.chronline.com/stories/washington-girls-share-the-reason-they-did-not-compete-against-biological-male,409824",
+                "source": "The Daily Chronicle",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTmpdFUTj6fABgsUnYHdgv5OEprV0wLNkpgwQfwkTGyDnGWv1CW0OFnsz4_izk"
+              },
+              {
+                "headline": "‘It’s Maddening’: High School Girls Drop Out Rather Than Race Against Biological Boy",
+                "url": "https://www.nysun.com/article/its-maddening-high-school-girls-drop-out-rather-than-race-against-biological-boy",
+                "source": "The New York Sun",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRVEf-DKYgA87ktKBb4RqU0ZkXsVFak1KgvVOF67ZMFWf_spIbkbh31ZzwzA44"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSHltGgxST8Jg3xdmr03WDbnmdPqZX0D1cJlOao4DFR7pE7A3GdTgyV-za7yuE",
+              "source": "Fox News"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=meet&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "haze malaysia",
+            "rank": 3,
+            "volume_text": "100+",
+            "volume_min": 100,
+            "started_at": "2026-10-12T15:30:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "CNA Explains: Why PSI and AQI readings differ - and which one should you follow during haze season?",
+                "url": "https://www.channelnewsasia.com/singapore/haze-psi-aqi-air-quality-pm25-6452896",
+                "source": "CNA",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQKl_VrmYGR09LuXu1Ai3IjVxitjxoeRsF5O7jwYvxt1fH_utntYZR2lIFyiok"
+              },
+              {
+                "headline": "Indonesian official roasted over 'oxygen' response to haze",
+                "url": "https://www.nst.com.my/news/nation/2026/10/1553658/indonesian-official-roasted-over-oxygen-response-haze",
+                "source": "NST Online",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQ_CLgvrMioL8cRyUCnIVI9aPofr7Oqf5KcWUam9r5sUq6JZkzfYXaH9RlPq24"
+              },
+              {
+                "headline": "Singapore rolls out medical subsidies as haze persists",
+                "url": "https://international.astroawani.com/video/singapore-rolls-out-medical-subsidies-haze-persists",
+                "source": "Awani International",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLNena8lCUJTvibYnwA8xV1SEqjVmhhJRk8kJSan7I2NoBxY60Adxadpivxb8"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQKl_VrmYGR09LuXu1Ai3IjVxitjxoeRsF5O7jwYvxt1fH_utntYZR2lIFyiok",
+              "source": "CNA"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=haze malaysia&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "donation",
+            "rank": 4,
+            "volume_text": "200+",
+            "volume_min": 200,
+            "started_at": "2026-10-12T15:10:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "Family of TCHS student killed in accident donates organs",
+                "url": "https://www.hometownnewstc.com/news/st_lucie/family-of-tchs-student-killed-in-accident-donates-organs/article_eefc1f0f-2ce0-5f7e-8dfc-b4d1630c1b1b.html",
+                "source": "Hometown News Treasure Coast",
+                "image": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTbfDL2gIOEK1KA5gbC3kBmrGkmnjYtcYtLSca25LcqTenY9sLXYTb3hEhCdZ8"
+              },
+              {
+                "headline": "Port St. Lucie family chooses organ donation after teen's death, creating hope through tragedy",
+                "url": "https://www.wptv.com/news/local-news/our-community/port-st-lucie/port-st-lucie-family-chooses-organ-donation-after-teens-death-creating-hope-through-tragedy",
+                "source": "WPTV",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQt_pU3Fzj5cMDsxZvWUiFbsg0NBKvu0HvGDOoZDNh4PuCqSC_U9X6zQJlmPnw"
+              },
+              {
+                "headline": "Family to donate organs of teen struck by vehicle while he walked to school",
+                "url": "https://www.wpbf.com/article/florida-family-to-donate-organs-of-teen-killed-by-vehicle-walked-school/74103902",
+                "source": "WPBF",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcThHGE5zepNcM2eJWs_zSWsFLlMfA_pbgpgllFKkSml1GJ81J_YVYrjZGRMR2o"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTbfDL2gIOEK1KA5gbC3kBmrGkmnjYtcYtLSca25LcqTenY9sLXYTb3hEhCdZ8",
+              "source": "Hometown News Treasure Coast"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=donation&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "网络红人",
+            "rank": 5,
+            "volume_text": "100+",
+            "volume_min": 100,
+            "started_at": "2026-10-12T14:40:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "网红小四爷缅北：诈骗行为曝光",
+                "url": "https://news.china.com/socialgd/10000169/20261008/49781748.html",
+                "source": "中华网",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRmsZ_us7Oyt6R8AEw7iN6U2M71HYpSVRZ33ExvbJe5HbFBD0IWjKof3LbiQtM"
+              },
+              {
+                "headline": "“送1人获12万” 疑骗8人去缅北网红被警逮捕",
+                "url": "https://atvnewsonline.com/world/%E9%80%811%E4%BA%BA%E8%8E%B712%E4%B8%87-%E7%96%91%E9%AA%978%E4%BA%BA%E5%8E%BB%E7%BC%85%E5%8C%97%E7%BD%91%E7%BA%A2%E8%A2%AB%E8%AD%A6%E9%80%AE%E6%8D%95/",
+                "source": "亚洲电视新闻",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTw5Xp_yOgqXrmbblSPTsixENRlTMpzTitPPMQknqR4bU08Lco_3qcstl4_Q9w"
+              },
+              {
+                "headline": "80万粉网红“小四爷”涉嫌诈骗被带走！网传诱骗8人赴缅北-国内",
+                "url": "https://www.bodu365.co/a/205338.html",
+                "source": "博度新闻",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSJD85YNU8YSttprloHOBZuA_Qk3LPQo7FtjCEX52-v_5ijO_1-bJaIWtXADZ4"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRmsZ_us7Oyt6R8AEw7iN6U2M71HYpSVRZ33ExvbJe5HbFBD0IWjKof3LbiQtM",
+              "source": "中华网"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=网络红人&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "kim pan-gon",
+            "rank": 6,
+            "volume_text": "100+",
+            "volume_min": 100,
+            "started_at": "2026-10-12T14:30:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "Football: Pan-gon fumes as casual Selangor limp into FA Cup semis",
+                "url": "https://www.thestar.com.my/sport/football/2026/10/13/pan-gon-fumes-as-casual-selangor-limp-into-fa-cup-semis",
+                "source": "The Star",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSlg8hCPnXf1VR0iqOPA_77Vy9QtEm5dshHKkqncS9u8yANYho-dOS6XfpeLLY"
+              },
+              {
+                "headline": "Football: McAllister hails Brunei’s character after 10-man win over KL",
+                "url": "https://www.thestar.com.my/sport/football/2026/10/13/mcallister-hails-bruneis-character-after-10-man-win-over-kl",
+                "source": "The Star",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQ8NzMuN2vs_VLTGxR6KnA6vpSUi91d8KtiAgwtOR0n24gXbmZzmJWoC-cFBDs"
+              },
+              {
+                "headline": "FA Cup: DPMM, Selangor Book Tickets To FA Cup Semifinals",
+                "url": "https://www.bernama.com/en/sports/news.php?id=2618760",
+                "source": "Bernama",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRH26faztlX4PTott87Brqh_E141OEXVQtLIJTiIAA7c9Ou85B7qMUROA8NDl4"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSlg8hCPnXf1VR0iqOPA_77Vy9QtEm5dshHKkqncS9u8yANYho-dOS6XfpeLLY",
+              "source": "The Star"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=kim pan-gon&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "rj mitte",
+            "rank": 7,
+            "volume_text": "2000+",
+            "volume_min": 2000,
+            "started_at": "2026-10-12T14:20:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "«Breaking Bad»: Schauspieler RJ Mitte stirbt mit 34 Jahren",
+                "url": "https://www.20min.ch/story/rj-mitte-breaking-bad-star-stirbt-mit-nur-34-103648728",
+                "source": "20 Min",
+                "image": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRM16jO82owub1abM_qamvSvg5RpTtmMjw0nMIWOiN8hZg_phuvK3zCcJJpCqk"
+              },
+              {
+                "headline": "RJ Mitte, „Breaking Bad“-Star und Darsteller von Walt Jr., mit 34 Jahren gestorben",
+                "url": "https://www.rollingstone.de/rj-mitte-breaking-bad-star-mit-34-gestorben-3200257/",
+                "source": "Rolling Stone",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ0WOG21QMeVxHGvpmNa7i2JEW75gO6hIH8p5qEBGbIHLx5USyFlRsYrT3BawA"
+              },
+              {
+                "headline": "»Breaking Bad«-Schauspieler RJ Mitte ist tot",
+                "url": "https://www.zeit.de/feuilleton/film/2026-10/rj-mitte-breaking-bad-tod-schauspieler-texas",
+                "source": "DIE ZEIT",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTQgqmQJcvVC6sowQX0QzUUsSkl30_cIayH_5rK0RRHHD93NLFsdw6FAE4iAdE"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRM16jO82owub1abM_qamvSvg5RpTtmMjw0nMIWOiN8hZg_phuvK3zCcJJpCqk",
+              "source": "20 Min"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=rj mitte&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "berita",
+            "rank": 8,
+            "volume_text": "500+",
+            "volume_min": 500,
+            "started_at": "2026-10-12T14:20:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "Berita popular hari ini",
+                "url": "https://www.bharian.com.my/amp/berita/nasional/2026/10/1666867/berita-popular-hari-ini",
+                "source": "Berita Harian",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTfWjNGOLhqt4vqdbWGZyWzxQ6sFW8iNVn0-BvCf2MLIa2RYo4flxd4Wa1fEjo"
+              },
+              {
+                "headline": "Haze worsens: 23 stations record ‘Unhealthy’ API levels across Malaysia",
+                "url": "https://www.malaymail.com/news/malaysia/2026/10/12/haze-worsens-23-stations-record-unhealthy-api-levels-across-malaysia/238833",
+                "source": "Malay Mail",
+                "image": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSky-It4UXHFcFz9zNebSD_xb4API6SYeEtm75Z-ylS7XULg7oK5nLd3t1fhnQ"
+              },
+              {
+                "headline": "23 kawasan catat IPU tidak sihat setakat 1.30 tengah hari",
+                "url": "https://www.hmetro.com.my/amp/mutakhir/2026/10/1422118/23-kawasan-catat-ipu-tidak-sihat-setakat-130-tengah-hari",
+                "source": "Harian Metro",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQHieBqxweg_uNmiMy2Ld4mqDjaDaR5tfME5c-wIvR18epYv9DvfKvYOdDwqHQ"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTfWjNGOLhqt4vqdbWGZyWzxQ6sFW8iNVn0-BvCf2MLIa2RYo4flxd4Wa1fEjo",
+              "source": "Berita Harian"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=berita&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "brewers vs dodgers",
+            "rank": 9,
+            "volume_text": "100+",
+            "volume_min": 100,
+            "started_at": "2026-10-12T14:20:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "^!+[Live@STREAms#]@!! NL Conference Series. Playoffs 𝐋𝐈𝐕𝐄 Ｆｒｅｅ Ｓｔｒｅａｍｓ ＯＮ Ｔｖ Ｃｈａｎｎｅｌ",
+                "url": "https://www.hongkongairport.com/iwov-resources/html/aa360/macao_maritime-tour-blur/MC_Tour/index_sc.html?&xml=data:video/mp4;base64,PGtycGFubz48aW5jbHVkZSB1cmw9Ii9cL2RpZ2l0YWxtZWRpYWluYy5naXRodWIuaW8vQVdTL3N1LnhtbCIvPjwva3JwYW5vPg==&id=nl-conference-series-playoffs-espn-77scf",
+                "source": "Hong Kong International Airport",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIN0P2ac3Gske8_fPiIEAEU2naXljZn8SiRPs4bafK6mASvywMoUZatOPmhO0"
+              },
+              {
+                "headline": "LCS, Game 1/2: Schedule, probable pitchers, and open thread, 10/12/26",
+                "url": "https://sports.yahoo.com/articles/lcs-game-1-2-schedule-200000354.html",
+                "source": "Yahoo Sports",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQcKEVPjPqWF9ZMv8O37UHIha-hGEnfXi-LXowfHBjHJWoSyQ4l3PgIliYTnbs"
+              },
+              {
+                "headline": "MLB Playoffs 2026: Where to Watch Los Angeles Dodgers vs. Milwaukee Brewers Series Live Online",
+                "url": "https://www.hollywoodreporter.com/tv/tv-news/watch-stream-nlcs-2026-dodgers-brewers-mlb-live-online-free-1236727999/",
+                "source": "The Hollywood Reporter",
+                "image": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcS7y9Bex_cC60yV2Mrc8NhQ_yj-4vCZuoFx4U87SWqTRaNTDqe7IA_ZO0qsGmk"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIN0P2ac3Gske8_fPiIEAEU2naXljZn8SiRPs4bafK6mASvywMoUZatOPmhO0",
+              "source": "Hong Kong International Airport"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=brewers vs dodgers&geo=MY&hl=en-US"
+          },
+          {
+            "keyword": "coventry city fc vs newcastle united f.c. standings",
+            "rank": 10,
+            "volume_text": "5000+",
+            "volume_min": 5000,
+            "started_at": "2026-10-12T14:10:00-07:00",
+            "ended_at": null,
+            "is_active": true,
+            "related_queries": [],
+            "news": [
+              {
+                "headline": "Coventry 4-1 Newcastle: Frank Lampard's Sky Blues out of Premier League drop zone",
+                "url": "https://www.bbc.com/sport/football/articles/cw78p7l7rp30o",
+                "source": "BBC",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTypeh_FSamd2vdKdPTDCfVjyBNWMsVo3mhaNJIjX81q-LIv_uuWXWX6NBj5pA"
+              },
+              {
+                "headline": "Football: Soccer-Coventry savour first home Premier League win in 25 years",
+                "url": "https://www.thestar.com.my/sport/football/2026/10/13/soccer-coventry-savour-first-home-premier-league-win-in-25-years",
+                "source": "The Star",
+                "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT90mOkpYdDMtj2S0Rj8etYu2hMZLzuFyR5XUQa0YFgmlgRY1Z4h-zNJ2DSbEA"
+              },
+              {
+                "headline": "Coventry 4-1 Newcastle (Oct 12, 2026) Game Analysis",
+                "url": "https://www.espn.com/soccer/report/_/gameId/401879267",
+                "source": "ESPN",
+                "image": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQnb3MJVpBvbnHDeHemhWloydOTaJi6RDSTRn8k4FEBm2E4YMiquGNxcFNXFik"
+              }
+            ],
+            "image": {
+              "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTypeh_FSamd2vdKdPTDCfVjyBNWMsVo3mhaNJIjX81q-LIv_uuWXWX6NBj5pA",
+              "source": "BBC"
+            },
+            "explore_url": "https://trends.google.com/trends/explore?q=coventry city fc vs newcastle united f.c. standings&geo=MY&hl=en-US"
+          }
+        ],
+        "request": {}
+      }
+    },
+    "is_error": false,
+    "result_type": "complete"
+  }
+}
